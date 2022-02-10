@@ -1,13 +1,12 @@
 """
 Alice Dudle
-2.2.2022
+10.2.2022
 """
 
 import os
 import glob
 import numpy as np
 import SimpleITK as sitk
-import cv2
 import copy
 import Swissknife
 import matplotlib.pyplot as plt
@@ -111,30 +110,31 @@ for row in new_list_dir:
     reader = sitk.ImageFileReader()
     dicom_files = glob.glob(filepath + "/*.dcm")
     if (len(dicom_files) < 5) & (scanner != "Trois_Chenes"):
-        test = input("Only " + str(len(dicom_files)) + " dicom files, continue? (y/n)\n")
-        if test == "n":
-            continue
+        print("Skip: " + str(len(dicom_files)) + " dicom files.")
+        df = df.drop(index=row)
+        continue
     reader.SetFileName(os.path.join(filepath, dicom_files[0]))
     reader.ReadImageInformation()
     df.loc[row, "Study date"] = reader.GetMetaData("0008|0020")
     df.loc[row, "Study time"] = reader.GetMetaData("0008|0030")
     df.loc[row, "Series time"] = reader.GetMetaData("0008|0031")
-    i = -1
 
+    com = reader.GetMetaData("0020|4000")
+    l = len(com)
     while True:
         try:
-            print(reader.GetMetaData("0020|4000")[:i])
-            df.loc[row, "Image comments"] = reader.GetMetaData("0020|4000")[:i]
+            print("Image comments: ", reader.GetMetaData("0020|4000")[:l])
+            df.loc[row, "Image comments"] = reader.GetMetaData("0020|4000")[:l]
             break
         except UnicodeEncodeError as err:
-            print("Unicode error", err, "for i=", i)
-            i -= 1
+            print("Unicode error", err, "for l=", l)
+            l -= 1
 
     if (scanner == "Trois_Chenes") | (scanner == "Cantonal_4"):
         df.loc[row, "Series number"] = reader.GetMetaData("0020|0011")
         df.loc[row, "Acquisition number"] = reader.GetMetaData("0020|0012")
 
-    else:
+    if scanner != "Trois_Chenes":
         df.loc[row, "Pitch"] = reader.GetMetaData("0018|9311")
         df.loc[row, "Voltage"] = reader.GetMetaData("0018|0060")
         df.loc[row, "Kernel"] = reader.GetMetaData("0018|1210")
@@ -154,6 +154,7 @@ for row in new_list_dir:
     dx, dy, dz = img_raw_sitk.GetSpacing()
     img_raw_np = sitk.GetArrayFromImage(img_raw_sitk).transpose(2, 1, 0)
 
+    """Prepare image for circle detection: clip and convert to uint8"""
     img_clip_np = copy.deepcopy(img_raw_np)
     img_clip_np = np.clip(img_clip_np, -100, 700)
     img_clip_np -= img_clip_np.min()
@@ -183,6 +184,7 @@ for row in new_list_dir:
         plt.show()
 
     """Detect 4-5 circles with highest density"""
+    print("LARGE PHANTOM")
     average_circles, nb_detected = detect_circles(img_8bit_np, minRadius, maxRadius, dist_min_btw_circle,
                                                   x0, x1, y0, y1, z0, filter=True)
 
@@ -235,6 +237,7 @@ for row in new_list_dir:
         plt.show()
 
     """Detect two circles inside hip phantom"""
+    print("HIP PHANTOM")
     average_circles2, nb_detected2 = detect_circles(img_8bit_np, minRadius, maxRadius, dist_min_btw_circle,
                                                     x0, x1, y0, y1, z0)
     if show_plots:
@@ -287,6 +290,7 @@ for row in new_list_dir:
             plt.show()
 
         """Detect circles (probably only 2 with highest intensity)"""
+        print("SMALL PHANTOM")
         average_circles3, nb_detected3 = detect_circles(img_8bit_np, minRadius, maxRadius, dist_min_btw_circle,
                                                         x0, x1, y0, y1, z0, sort=1, filter=False)
         """Compute position of third circle depending on how the phantom is positioned"""
@@ -338,7 +342,6 @@ for row in new_list_dir:
 
     """Linear regression with all phantoms together"""
     slope, intercept, r_value, p_value, std_err = stats.linregress(all_values, all_HU_values)
-    # print("slope: ", slope, ", intercept: ", intercept)
     df.loc[row, "All slope"] = slope
     df.loc[row, "All intercept"] = intercept
     df.loc[row, "All correl"] = r_value
@@ -371,4 +374,5 @@ for row in new_list_dir:
     else:
         plot_final(img_raw_np, np.concatenate([average_circles, average_circles2]),
                    save=os.path.join(filepath, "plot_ex_all.png"), show_plot=show_plots_final)
+    df.sort_values(by=["Series time"], inplace=True)
     df.to_csv(df_path)

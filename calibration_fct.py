@@ -1,6 +1,6 @@
 """
 Alice Dudle
-2.2.2022
+9.2.2022
 
 """
 
@@ -182,7 +182,7 @@ def plot_final(img_raw, average_list, z0=0, z1=None, save=None, show_plot=True):
     color_list = ['g', 'g', 'g', 'g', 'g', 'g', 'orange', 'orange', 'r', 'r', 'r']
     if z1 is None:
         z1 = img_raw.shape[2]
-    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     x = np.random.randint(z0, z1)
     ax.imshow(img_raw[:, :, x].transpose(1, 0), cmap="gray")
     for j in range(average_list.shape[0]):
